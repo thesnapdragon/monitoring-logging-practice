@@ -5,18 +5,20 @@ services:
     build: ./app
     ports:
       - 8000:5000
-    restart: unless-stopped
     volumes:
       - .:/opt
+    depends_on:
+      - fluent-bit
+    logging:
+      driver: fluentd
 
   prometheus:
     image: prom/prometheus
     container_name: prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - --config.file=/etc/prometheus/prometheus.yml
     ports:
       - 9090:9090
-    restart: unless-stopped
     volumes:
       - ./prometheus:/etc/prometheus
 
@@ -25,9 +27,40 @@ services:
     container_name: grafana
     ports:
       - 3000:3000
-    restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=grafana
     volumes:
       - ./grafana:/etc/grafana/provisioning/datasources
+
+  elasticsearch:
+    image: elasticsearch:7.17.8
+    container_name: elasticsearch
+    ports:
+      - 9200:9200
+    environment:
+      - discovery.type=single-node
+  
+  kibana:
+    image: kibana:7.17.8
+    container_name: kibana
+    ports:
+      - 5601:5601
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+
+  fluent-bit:
+    image: fluent/fluent-bit
+    container_name: fluentbit
+    command:
+      - /fluent-bit/bin/fluent-bit
+      - --config=/etc/fluent-bit/fluent-bit.conf
+    ports:
+      - 24224:24224
+      - 24224:24224/udp
+    volumes:
+      - ./fluentbit/:/etc/fluent-bit/
+    depends_on:
+      - elasticsearch
